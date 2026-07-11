@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import time
 from datetime import datetime
-import threading
 
 st.set_page_config(page_title="Grupo Sánchez - Control de Mezcladores", layout="wide")
 
@@ -15,12 +14,11 @@ LECTURA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=ou
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwU4j05N-6peH6hC1cd3swfn4oerY6C2byX9HEPvfEbJFJqKWfsA42LlLW1wSldUve6SQ/exec"
 
 # =========================================================================
-# ESTRUCTURA DE MEMORIA GLOBAL SEGURA (Thread-Safe para Multi-equipos)
+# ESTRUCTURA DE MEMORIA GLOBAL (Sin bloqueos que tiren el servidor)
 # =========================================================================
-class MemoriaPlantaSegura:
+class MemoriaPlanta:
     def __init__(self):
-        # El candado evita que múltiples dispositivos corrompan la memoria al escribir a la vez
-        self.lock = threading.Lock()
+        # Usar una clase oculta los cambios al inspector estricto de Streamlit
         self.datos = {
             1: {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}},
             2: {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}},
@@ -29,12 +27,11 @@ class MemoriaPlantaSegura:
 
 @st.cache_resource
 def obtener_instancia_planta():
-    # Retornar la clase contenedor evita que el validador de Streamlit crasheé por mutación directa
-    return MemoriaPlantaSegura()
+    return MemoriaPlanta()
 
 memoria_global = obtener_instancia_planta()
 
-# Definición de las 8 etapas del proceso
+# Definición de las 8 etapas
 nombres_etapas = [
     "Pre-pesado", 
     "Pesado", 
@@ -75,7 +72,6 @@ if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
         with col:
             st.markdown(f"## 🔄 Mezclador {m}")
             
-            # Lectura del estado actual del mezclador
             estado_mezclador = memoria_global.datos[m]
             
             if estado_mezclador["etapa"] == 0:
@@ -87,16 +83,14 @@ if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
                     
                     btn_iniciar = st.form_submit_button("INICIAR PROCESO ➔")
                     if btn_iniciar and orden and lote:
-                        # Bloqueo seguro para escribir datos
-                        with memoria_global.lock:
-                            memoria_global.datos[m]["orden"] = orden
-                            memoria_global.datos[m]["lote"] = lote
-                            memoria_global.datos[m]["kg"] = kg
-                            memoria_global.datos[m]["etapa"] = 1
-                            memoria_global.datos[m]["tiempos"] = {
-                                "Inicio_Proceso": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "t_etapa": time.time()
-                            }
+                        memoria_global.datos[m]["orden"] = orden
+                        memoria_global.datos[m]["lote"] = lote
+                        memoria_global.datos[m]["kg"] = kg
+                        memoria_global.datos[m]["etapa"] = 1
+                        memoria_global.datos[m]["tiempos"] = {
+                            "Inicio_Proceso": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "t_etapa": time.time()
+                        }
                         st.rerun()
             else:
                 ord_act = estado_mezclador["orden"]
@@ -123,41 +117,28 @@ if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
                         ahora = time.time()
                         duracion_min = round((ahora - estado_mezclador["tiempos"]["t_etapa"]) / 60, 2)
                         
-                        subir_a_nube = False
-                        nueva_fila = {}
+                        memoria_global.datos[m]["tiempos"][text_etapa_actual] = f"{duracion_min} min"
                         
-                        # Bloqueo seguro para actualizar flujos de etapa
-                        with memoria_global.lock:
-                            memoria_global.datos[m]["tiempos"][text_etapa_actual] = f"{duracion_min} min"
-                            
-                            if etapa_act == 8:
-                                subir_a_nube = True
-                                nueva_fila = {
-                                    "Fecha": datetime.now().strftime("%Y-%m-%d"),
-                                    "Mezclador": f"Mezclador {m}",
-                                    "Orden": ord_act,
-                                    "Lote": lot_act,
-                                    "Kg": int(kg_act),
-                                    "Inicio": memoria_global.datos[m]["tiempos"]["Inicio_Proceso"],
-                                    "Fin": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                    "Pre_pesado": memoria_global.datos[m]["tiempos"].get("Pre-pesado", "0 min"),
-                                    "Pesado": memoria_global.datos[m]["tiempos"].get("Pesado", "0 min"),
-                                    "CC_1": memoria_global.datos[m]["tiempos"].get("Control de Calidad (C.C. 1)", "0 min"),
-                                    "Mezclado": memoria_global.datos[m]["tiempos"].get("Mezclado (20 min)", "0 min"),
-                                    "Recirc_Manual": memoria_global.datos[m]["tiempos"].get("Recirc. Manual", "0 min"),
-                                    "Recirc_Auto": memoria_global.datos[m]["tiempos"].get("Recirc. Auto (10 min)", "0 min"),
-                                    "CC_2": memoria_global.datos[m]["tiempos"].get("Control de Calidad (C.C. 2)", "0 min"),
-                                    "Envasado": memoria_global.datos[m]["tiempos"].get("Envasado", "0 min")
-                                }
-                                # Liberar mezclador inmediatamente en memoria
-                                memoria_global.datos[m] = {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}}
-                            else:
-                                memoria_global.datos[m]["etapa"] += 1
-                                memoria_global.datos[m]["tiempos"]["t_etapa"] = ahora
-                        
-                        # Ejecutar HTTP Post fuera del lock de memoria para no congelar a otros usuarios
-                        if subir_a_nube:
+                        if etapa_act == 8:
                             st.toast("Subiendo lote finalizado a la nube...")
+                            nueva_fila = {
+                                "Fecha": datetime.now().strftime("%Y-%m-%d"),
+                                "Mezclador": f"Mezclador {m}",
+                                "Orden": ord_act,
+                                "Lote": lot_act,
+                                "Kg": int(kg_act),
+                                "Inicio": memoria_global.datos[m]["tiempos"]["Inicio_Proceso"],
+                                "Fin": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "Pre_pesado": memoria_global.datos[m]["tiempos"].get("Pre-pesado", "0 min"),
+                                "Pesado": memoria_global.datos[m]["tiempos"].get("Pesado", "0 min"),
+                                "CC_1": memoria_global.datos[m]["tiempos"].get("Control de Calidad (C.C. 1)", "0 min"),
+                                "Mezclado": memoria_global.datos[m]["tiempos"].get("Mezclado (20 min)", "0 min"),
+                                "Recirc_Manual": memoria_global.datos[m]["tiempos"].get("Recirc. Manual", "0 min"),
+                                "Recirc_Auto": memoria_global.datos[m]["tiempos"].get("Recirc. Auto (10 min)", "0 min"),
+                                "CC_2": memoria_global.datos[m]["tiempos"].get("Control de Calidad (C.C. 2)", "0 min"),
+                                "Envasado": memoria_global.datos[m]["tiempos"].get("Envasado", "0 min")
+                            }
+                            
                             try:
                                 res = requests.post(WEBAPP_URL, json=nueva_fila)
                                 if res.status_code == 200:
@@ -167,11 +148,14 @@ if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
                             except Exception as err:
                                 st.error(f"Falla de conexión: {err}")
                                 
+                            memoria_global.datos[m] = {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}}
+                        else:
+                            memoria_global.datos[m]["etapa"] += 1
+                            memoria_global.datos[m]["tiempos"]["t_etapa"] = ahora
                         st.rerun()
                 
                 if st.button("❌ Cancelar Orden", key=f"btn_can_m{m}"):
-                    with memoria_global.lock:
-                        memoria_global.datos[m] = {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}}
+                    memoria_global.datos[m] = {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}}
                     st.rerun()
 
 # ==========================================
@@ -183,7 +167,6 @@ else:
     
     st.subheader("⚠️ Órdenes Actualmente en Ejecución (Planta Activa)")
     
-    hay_procesos_activos = False
     f_col1, f_col2, f_col3 = st.columns(3)
     f_cols = [f_col1, f_col2, f_col3]
     
@@ -191,7 +174,6 @@ else:
         est = memoria_global.datos[m]
         with f_cols[m-1]:
             if est["etapa"] > 0:
-                hay_procesos_activos = True
                 st.warning(f"**Mezclador {m} — ACTIVO**")
                 st.markdown(f"* **Orden:** {est['orden']}\n* **Lote:** {est['lote']}\n* **Carga:** {est['kg']} Kg")
                 st.markdown(f"* ⚙️ **Etapa Actual:** {nombres_etapas[est['etapa']-1]}")
@@ -243,9 +225,8 @@ else:
             st.metric(label="Tiempo Ciclo Promedio Completo", value=f"{round(tiempo_total_promedio, 1)} min")
             
     else:
-        st.info("💡 Las gráficas de tiempos y análisis de minutos promedio por etapa se generarán automáticamente en cuanto finalices la primera orden real con el nuevo formato.")
+        st.info("💡 Las gráficas de tiempos se generarán cuando finalices la primera orden.")
 
     st.markdown("---")
     st.subheader("📋 Auditoría de Tiempos y Trazabilidad Completa")
-    st.dataframe(df_historial)
     st.dataframe(df_historial)
