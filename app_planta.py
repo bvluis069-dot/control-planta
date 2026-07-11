@@ -2,77 +2,121 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
+from datetime import datetime
 
-st.set_page_config(page_title="Grupo Sánchez - Control Avanzado", layout="wide")
+st.set_page_config(page_title="Grupo Sánchez - Control de Mezcladores", layout="wide")
 
-st.title("🏭 Monitoreo y Control de Producción — Base Solvente T2")
+# Inicializar la memoria de los 3 mezcladores si no existe
+for m in [1, 2, 3]:
+    if f"m{m}_etapa" not in st.session_state:
+        st.session_state[f"m{m}_etapa"] = 0
+        st.session_state[f"m{m}_orden"] = ""
+        st.session_state[f"m{m}_lote"] = ""
+        st.session_state[f"m{m}_kg"] = 0
+        st.session_state[f"m{m}_tiempos"] = {}
+
+nombres_etapas = ["Pre-pesado", "Pesado", "Mezclado (20 min)", "Recirc. Manual", "Recirc. Auto (10 min)", "Envasado"]
+iconos = ["📦", "⚖️", "🔄", "🛠️", "🔁", "🛍️"]
+
+st.title("🏭 Monitoreo y Control de Procesos — Base Solvente T2")
 st.markdown("---")
 
-# 1. ESTABLECER CONEXIÓN CON GOOGLE SHEETS
+# Intentar conectar con tu Google Sheets para guardar el historial
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # Leer las filas activas desde Google Sheets (Pestaña llamada 'Activas')
-    df_actual = conn.read(worksheet="Activas", ttl="0d")
 except Exception as e:
-    st.error("Conectando con la base de datos central...")
-    # Datos de respaldo estables por si la hoja está vacía al inicio
-    df_actual = pd.DataFrame([
-        {"Orden": "ORD-001", "Lote": "L-1044431", "Kg": 1200, "Etapa_Actual": "Pesado", "Comentarios": "Turno A"},
-        {"Orden": "ORD-002", "Lote": "L-1044432", "Kg": 800, "Etapa_Actual": "Mezclado (20 min)", "Comentarios": "Muestra tomada"},
-        {"Orden": "ORD-003", "Lote": "L-1044433", "Kg": 2000, "Etapa_Actual": "En espera", "Comentarios": "Materia prima lista"}
-    ])
+    conn = None
 
-# ==========================================
-# VISTA 1: TABLERO VISUAL SIMULTÁNEO (3 LÍNEAS)
-# ==========================================
-st.subheader("📊 Pistas de Fabricación en Tiempo Real (Monitoreo)")
+# CREAR 3 COLUMNAS EN LA PÁGINA (Una para cada Mezclador)
+col_m1, col_m2, col_m3 = st.columns(3)
+mezcladores_cols = [col_m1, col_m2, col_m3]
 
-# Aseguramos que maneje las primeras 3 fabricaciones de la lista
-df_tres = df_actual.head(3)
-cols_fab = st.columns(3)
-etapas_lista = ["En espera", "Pre-pesado", "Pesado", "Mezclado (20 min)", "Recirculación", "Envasado"]
-
-for index, row in df_tres.iterrows():
-    with cols_fab[index]:
-        st.markdown(f"### ⚙️ Fabricación {index + 1}: {row.get('Orden', 'S/O')}")
-        st.caption(f"**Lote:** {row.get('Lote', '-')} | **Cantidad:** {row.get('Kg', 0)} Kg")
+for i, col in enumerate(mezcladores_cols):
+    m = i + 1  # Número de mezclador (1, 2 o 3)
+    
+    with col:
+        st.markdown(f"## 🔄 Mezclador {m}")
         
-        etapa_actual = row.get('Etapa_Actual', 'En espera')
-        
-        # Dibujar la línea de tiempo dinámica con iconos de estado
-        for etapa in etapas_lista:
-            if etapa == etapa_actual:
-                st.markdown(f"🟠 **[{etapa}]** <-- En proceso")
-            elif etapa in etapas_lista and etapa_actual in etapas_lista and etapas_lista.index(etapa) < etapas_lista.index(etapa_actual):
-                st.markdown(f"🟢 {etapa} ✓")
-            else:
-                st.markdown(f"⚪ {etapa}")
-        
-        st.markdown(f"*Nota: {row.get('Comentarios', '')}*")
-
-st.markdown("---")
-
-# ==========================================
-# VISTA 2: FORMATO MODIFICABLE (Editor General)
-# ==========================================
-st.subheader("📝 Panel de Edición y Cambios (Estilo Excel)")
-st.info("💡 Haz doble clic sobre cualquier celda para modificar datos o avanzar de etapa. Al terminar, presiona el botón de guardar abajo.")
-
-# Corregido width='stretch' para evitar advertencias y asegurar estabilidad
-datos_editados = st.data_editor(
-    df_actual,
-    num_rows="dynamic",
-    width="stretch",
-    key="editor_central"
-)
-
-# Botón para sincronizar los cambios de vuelta a Google Sheets
-if st.button("💾 Guardar y Sincronizar con la Nube", type="primary"):
-    try:
-        # Sobreescribir la hoja de Google Sheets con los nuevos datos modificados
-        conn.update(worksheet="Activas", data=datos_editados)
-        st.success("¡Sincronización exitosa! Los datos se han actualizado en Google Sheets.")
-        time.sleep(1)
-        st.rerun()
-    except Exception as e:
-        st.error(f"Error al guardar: {e}. Verifica la configuración de Secrets.")
+        # --- ESTADO 0: REGISTRO DE NUEVA ORDEN ---
+        if st.session_state[f"m{m}_etapa"] == 0:
+            st.markdown("### 📝 Nueva Orden")
+            with st.form(f"form_m{m}"):
+                orden = st.text_input("Número de Orden", key=f"input_o_m{m}", placeholder="Ej. ORD-2026")
+                lote = st.text_input("Número de Lote", key=f"input_l_m{m}", placeholder="Ej. L-1044431")
+                kg = st.number_input("Kilogramos (Kg)", key=f"input_k_m{m}", min_value=0, value=1000)
+                
+                btn_iniciar = st.form_submit_button("INICIAR PROCESO ➔")
+                if btn_iniciar and orden and lote:
+                    st.session_state[f"m{m}_orden"] = orden
+                    st.session_state[f"m{m}_lote"] = lote
+                    st.session_state[f"m{m}_kg"] = kg
+                    st.session_state[f"m{m}_etapa"] = 1
+                    st.session_state[f"m{m}_tiempos"]["Inicio_Proceso"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    st.session_state[f"m{m}_tiempos"]["t_etapa"] = time.time()
+                    st.rerun()
+                    
+        # --- ESTADO ACTIVO: CONTROL DE ETAPAS Y BOTONES ---
+        else:
+            ord_act = st.session_state[f"m{m}_orden"]
+            lot_act = st.session_state[f"m{m}_lote"]
+            kg_act = st.session_state[f"m{m}_kg"]
+            etapa_act = st.session_state[f"m{m}_etapa"]
+            
+            st.info(f"**Orden:** {ord_act} | **Lote:** {lot_act} | **Kg:** {kg_act}")
+            
+            # Dibujar las etapas visuales tipo semáforo
+            for idx_e, nombre_e in enumerate(nombres_etapas):
+                num_e = idx_e + 1
+                if etapa_act > num_e:
+                    st.markdown(f"🟢 {iconos[idx_e]} {nombre_e} ✓")
+                elif etapa_act == num_e:
+                    st.markdown(f"🟠 **[{iconos[idx_e]} {nombre_e}]** <-- Activo")
+                else:
+                    st.markdown(f"⚪ {iconos[idx_e]} {nombre_e}")
+            
+            st.markdown("---")
+            
+            # Botón de avance para el operador
+            if etapa_act <= 6:
+                nombre_etapa_actual = nombres_etapas[etapa_act - 1]
+                if st.button(f"FINALIZAR {nombre_etapa_actual.upper()} ✓", key=f"btn_sig_m{m}", type="primary", use_container_width=True):
+                    ahora = time.time()
+                    # Calcular cuántos minutos duró la etapa
+                    duracion_min = round((ahora - st.session_state[f"m{m}_tiempos"]["t_etapa"]) / 60, 2)
+                    st.session_state[f"m{m}_tiempos"][nombre_etapa_actual] = f"{duracion_min} min"
+                    
+                    if etapa_act == 6:
+                        # Si es la última etapa, armamos la fila para el historial en Excel
+                        st.success("¡Guardando registro en el historial!")
+                        nueva_fila = {
+                            "Fecha": datetime.now().strftime("%Y-%m-%d"),
+                            "Mezclador": f"Mezclador {m}",
+                            "Orden": ord_act,
+                            "Lote": lot_act,
+                            "Kg": kg_act,
+                            "Inicio": st.session_state[f"m{m}_tiempos"]["Inicio_Proceso"],
+                            "Fin": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        # Meter las duraciones de cada etapa
+                        for e in nombres_etapas:
+                            nueva_fila[e] = st.session_state[f"m{m}_tiempos"].get(e, "0 min")
+                        
+                        # Subir los tiempos al Google Sheets de tu historial
+                        if conn is not None:
+                            try:
+                                df_historial = conn.read(worksheet="Historial", ttl="0d")
+                                df_nuevo = pd.concat([df_historial, pd.DataFrame([nueva_fila])], ignore_index=True)
+                                conn.update(worksheet="Historial", data=df_nuevo)
+                            except:
+                                pass
+                        
+                        # Reiniciar mezclador
+                        st.session_state[f"m{m}_etapa"] = 0
+                    else:
+                        st.session_state[f"m{m}_etapa"] += 1
+                        st.session_state[f"m{m}_tiempos"]["t_etapa"] = ahora
+                    st.rerun()
+            
+            if st.button("❌ Cancelar", key=f"btn_can_m{m}", use_container_width=True):
+                st.session_state[f"m{m}_etapa"] = 0
+                st.rerun()
