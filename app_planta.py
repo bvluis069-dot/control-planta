@@ -21,7 +21,7 @@ iconos = ["📦", "⚖️", "🔄", "🛠️", "🔁", "🛍️"]
 st.title("🏭 Monitoreo y Control de Procesos — Base Solvente T2")
 st.markdown("---")
 
-# Intentar conectar con tu Google Sheets para guardar el historial
+# Conexión principal con Google Sheets
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
@@ -76,7 +76,7 @@ for i, col in enumerate(mezcladores_cols):
             
             st.markdown("---")
             
-            # Botones de avance limpios sin parámetros obsoletos
+            # Botones de avance
             if etapa_act <= 6:
                 text_etapa_actual = nombres_etapas[etapa_act - 1]
                 if st.button(f"FINALIZAR {text_etapa_actual.upper()} ✓", key=f"btn_sig_m{m}", type="primary"):
@@ -85,26 +85,36 @@ for i, col in enumerate(mezcladores_cols):
                     st.session_state[f"m{m}_tiempos"][text_etapa_actual] = f"{duracion_min} min"
                     
                     if etapa_act == 6:
-                        st.success("¡Guardando registro en el historial!")
+                        st.toast("Subiendo datos al historial...")
                         nueva_fila = {
-                            "Fecha": datetime.now().strftime("%Y-%m-%d"),
-                            "Mezclador": f"Mezclador {m}",
-                            "Orden": ord_act,
-                            "Lote": lot_act,
-                            "Kg": kg_act,
-                            "Inicio": st.session_state[f"m{m}_tiempos"]["Inicio_Proceso"],
-                            "Fin": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            "FECHA": datetime.now().strftime("%Y-%m-%d"),
+                            "MEZCLADOR": f"Mezclador {m}",
+                            "ORDEN": ord_act,
+                            "LOTE": lot_act,
+                            "KG": kg_act,
+                            "INICIO": st.session_state[f"m{m}_tiempos"]["Inicio_Proceso"],
+                            "FIN": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Pre-pesado": st.session_state[f"m{m}_tiempos"].get("Pre-pesado", "0 min"),
+                            "Pesado": st.session_state[f"m{m}_tiempos"].get("Pesado", "0 min"),
+                            "Mezclado (20 min)": st.session_state[f"m{m}_tiempos"].get("Mezclado (20 min)", "0 min"),
+                            "Recirc. Manual": st.session_state[f"m{m}_tiempos"].get("Recirc. Manual", "0 min"),
+                            "Recirc. Auto (10 min)": st.session_state[f"m{m}_tiempos"].get("Recirc. Auto (10 min)", "0 min"),
+                            "Envasado": st.session_state[f"m{m}_tiempos"].get("Envasado", "0 min")
                         }
-                        for e in nombres_etapas:
-                            nueva_fila[e] = st.session_state[f"m{m}_tiempos"].get(e, "0 min")
                         
+                        # Guardar de forma ultra segura forzando la actualización
                         if conn is not None:
                             try:
-                                df_historial = conn.read(worksheet="Historial", ttl="0d")
+                                try:
+                                    df_historial = conn.read(worksheet="Historial", ttl="0d")
+                                except:
+                                    df_historial = pd.DataFrame(columns=nueva_fila.keys())
+                                
                                 df_nuevo = pd.concat([df_historial, pd.DataFrame([nueva_fila])], ignore_index=True)
                                 conn.update(worksheet="Historial", data=df_nuevo)
-                            except:
-                                pass
+                                st.success("¡Historial sincronizado!")
+                            except Exception as error_sheets:
+                                st.error(f"Error de permisos: {error_sheets}")
                         
                         st.session_state[f"m{m}_etapa"] = 0
                     else:
