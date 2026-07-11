@@ -1,69 +1,78 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
-from datetime import datetime
 
-st.set_page_config(page_title="Grupo Sánchez - Control Remoto", layout="wide")
-
-# --- SIMULACIÓN DE BASE DE DATOS (Conexión local temporal antes de enlazar API) ---
-# En el paso siguiente cambiaremos esto por la conexión directa a tu Google Sheets
-if "df_fabricaciones" not in st.session_state:
-    st.session_state.df_fabricaciones = pd.DataFrame([
-        {"Orden": "ORD-001", "Lote": "L-1044431", "Kg": 1200, "Etapa_Actual": "Pesado", "Comentarios": "Operador en turno A"},
-        {"Orden": "ORD-002", "Lote": "L-1044432", "Kg": 800, "Etapa_Actual": "Mezclado (20 min)", "Comentarios": "Esperando muestra de control"},
-        {"Orden": "ORD-003", "Lote": "L-1044433", "Kg": 2000, "Etapa_Actual": "En espera", "Comentarios": "Materia prima completa"}
-    ])
+st.set_page_config(page_title="Grupo Sánchez - Control Avanzado", layout="wide")
 
 st.title("🏭 Monitoreo y Control de Producción — Base Solvente T2")
 st.markdown("---")
 
-# ==========================================
-# VISTA 1: MONITOREO VISUAL SIMULTÁNEO (Las 3 Fabricaciones)
-# ==========================================
-st.subheader("📊 Pistas de Fabricación en Tiempo Real (Desde Casa)")
+# 1. ESTABLECER CONEXIÓN CON GOOGLE SHEETS
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Leer las filas activas desde Google Sheets (Pestaña llamada 'Activas')
+    df_actual = conn.read(worksheet="Activas", ttl="0d")
+except Exception as e:
+    st.error("Conectando con la base de datos central...")
+    # Datos de respaldo por si la hoja está vacía al inicio
+    df_actual = pd.DataFrame([
+        {"Orden": "ORD-001", "Lote": "L-1044431", "Kg": 1200, "Etapa_Actual": "Pesado", "Comentarios": "Turno A"},
+        {"Orden": "ORD-002", "Lote": "L-1044432", "Kg": 800, "Etapa_Actual": "Mezclado (20 min)", "Comentarios": "Muestra tomada"},
+        {"Orden": "ORD-003", "Lote": "L-1044433", "Kg": 2000, "Etapa_Actual": "En espera", "Comentarios": "Materia prima lista"}
+    ])
 
+# ==========================================
+# VISTA 1: TABLERO VISUAL SIMULTÁNEO (3 LÍNEAS)
+# ==========================================
+st.subheader("📊 Pistas de Fabricación en Tiempo Real (Monitoreo)")
+
+# Aseguramos que maneje las primeras 3 fabricaciones de la lista
+df_tres = df_actual.head(3)
 cols_fab = st.columns(3)
 etapas_lista = ["En espera", "Pre-pesado", "Pesado", "Mezclado (20 min)", "Recirculación", "Envasado"]
 
-for index, row in st.session_state.df_fabricaciones.iterrows():
+for index, row in df_tres.iterrows():
     with cols_fab[index]:
-        st.markdown(f"### ⚙️ Línea {index + 1}: {row['Orden']}")
-        st.caption(f"**Lote:** {row['Lote']} | **Cantidad:** {row['Kg']} Kg")
+        st.markdown(f"### ⚙️ Fabricación {index + 1}: {row.get('Orden', 'S/O')}")
+        st.caption(f"**Lote:** {row.get('Lote', '-')} | **Cantidad:** {row.get('Kg', 0)} Kg")
         
-        # Dibujar barra visual de progreso para cada una de las 3 órdenes
-        etapa_actual = row['Etapa_Actual']
+        etapa_actual = row.get('Etapa_Actual', 'En espera')
         
+        # Dibujar la línea de tiempo dinámica con iconos de estado
         for etapa in etapas_lista:
             if etapa == etapa_actual:
-                # Etapa actual en naranja brillante
                 st.markdown(f"🟠 **[{etapa}]** <-- En proceso")
-            elif etapas_lista.index(etapa) < etapas_lista.index(etapa_actual if etapa_actual in etapas_lista else "En espera"):
-                # Etapas del pasado en verde
+            elif etapa in etapas_lista and etapa_actual in etapas_lista and etapas_lista.index(etapa) < etapas_lista.index(etapa_actual):
                 st.markdown(f"🟢 {etapa} ✓")
             else:
-                # Etapas futuras en gris
                 st.markdown(f"⚪ {etapa}")
         
-        st.markdown(f"*Nota: {row['Comentarios']}*")
+        st.markdown(f"*Nota: {row.get('Comentarios', '')}*")
 
 st.markdown("---")
 
 # ==========================================
-# VISTA 2: FORMATO MODIFICABLE (Estilo Excel)
+# VISTA 2: FORMATO MODIFICABLE (Editor General)
 # ==========================================
-st.subheader("📝 Panel de Control Modificable (Editor de Datos)")
-st.info("💡 Puedes dar doble clic sobre cualquier celda de abajo para modificar los datos (Kg, Lote o cambiar la Etapa). Los cambios se reflejarán arriba inmediatamente.")
+st.subheader("📝 Panel de Edición y Cambios (Estilo Excel)")
+st.info("💡 Haz doble clic sobre cualquier celda para modificar datos o avanzar de etapa. Al terminar, presiona el botón de guardar abajo.")
 
-# El data_editor permite modificar los datos directamente en la pantalla
+# Componente interactivo para modificar los datos directamente en la web
 datos_editados = st.data_editor(
-    st.session_state.df_fabricaciones,
-    num_rows="dynamic", # Te permite agregar o quitar filas si hay más fabricaciones
-    use_container_width=True
+    df_actual,
+    num_rows="dynamic",
+    use_container_width=True,
+    key="editor_central"
 )
 
-# Guardar los cambios hechos en la tabla modificable al estado del sistema
-if st.button("💾 Guardar y Sincronizar Cambios"):
-    st.session_state.df_fabricaciones = datos_editados
-    st.success("¡Datos actualizados correctamente en el sistema!")
-    time.sleep(1)
-    st.rerun()
+# Botón para sincronizar los cambios de vuelta a Google Sheets
+if st.button("💾 Guardar y Sincronizar con la Nube", type="primary"):
+    try:
+        # Sobreescribir la hoja de Google Sheets con los nuevos datos modificados
+        conn.update(worksheet="Activas", data=datos_editados)
+        st.success("¡Sincronización exitosa! Los datos se han actualizado en Google Sheets y en ambas pantallas.")
+        time.sleep(1)
+        st.rerun()
+    except Exception as e:
+        st.error(f"Error al guardar: {e}. Verifica la configuración de Secrets.")
