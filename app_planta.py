@@ -1,99 +1,69 @@
 import streamlit as st
+import pandas as pd
 import time
 from datetime import datetime
-import pandas as pd
 
-# Configuración de la página (Moderna y oscura)
-st.set_page_config(page_title="Grupo Sánchez - Control de Procesos", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Grupo Sánchez - Control Remoto", layout="wide")
 
-# Estilo personalizado para los bloques de las etapas
-st.markdown("""
-    <style>
-    .etapa-espera { background-color: #1e1e24; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid #444; }
-    .etapa-proceso { background-color: #ff9f1c; color: black; padding: 20px; border-radius: 10px; text-align: center; font-weight: bold; animation: pulse 2s infinite; }
-    .etapa-listo { background-color: #172a28; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid #2ec4b6; }
-    h3 { margin-top: 5px !important; }
-    </style>
-""", unsafe_allow_html=True)
+# --- SIMULACIÓN DE BASE DE DATOS (Conexión local temporal antes de enlazar API) ---
+# En el paso siguiente cambiaremos esto por la conexión directa a tu Google Sheets
+if "df_fabricaciones" not in st.session_state:
+    st.session_state.df_fabricaciones = pd.DataFrame([
+        {"Orden": "ORD-001", "Lote": "L-1044431", "Kg": 1200, "Etapa_Actual": "Pesado", "Comentarios": "Operador en turno A"},
+        {"Orden": "ORD-002", "Lote": "L-1044432", "Kg": 800, "Etapa_Actual": "Mezclado (20 min)", "Comentarios": "Esperando muestra de control"},
+        {"Orden": "ORD-003", "Lote": "L-1044433", "Kg": 2000, "Etapa_Actual": "En espera", "Comentarios": "Materia prima completa"}
+    ])
 
-# Mantener el estado de la aplicación en la sesión web
-if "etapa" not in st.session_state:
-    st.session_state.etapa = 0
-    st.session_state.orden = ""
-    st.session_state.lote = ""
-    st.session_state.kg = 0
-    st.session_state.tiempos = {}
+st.title("🏭 Monitoreo y Control de Producción — Base Solvente T2")
+st.markdown("---")
 
-st.title("🏭 Sistema de Control de Procesos en Tiempo Real")
-st.subheader("Grupo Sánchez — Base Solvente T2")
+# ==========================================
+# VISTA 1: MONITOREO VISUAL SIMULTÁNEO (Las 3 Fabricaciones)
+# ==========================================
+st.subheader("📊 Pistas de Fabricación en Tiempo Real (Desde Casa)")
 
-# --- VISTA DE ACCESO / REGISTRO ---
-if st.session_state.etapa == 0:
-    st.markdown("### 📝 Registro de Nueva Orden de Producción")
-    with st.form("registro_orden"):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            orden = st.text_input("Número de Orden", placeholder="Ej. ORD-2026")
-        with col2:
-            lote = st.text_input("Número de Lote", placeholder="Ej. L-1044431")
-        with col3:
-            kg = st.number_input("Kilogramos (Kg)", min_value=0, value=1000)
+cols_fab = st.columns(3)
+etapas_lista = ["En espera", "Pre-pesado", "Pesado", "Mezclado (20 min)", "Recirculación", "Envasado"]
+
+for index, row in st.session_state.df_fabricaciones.iterrows():
+    with cols_fab[index]:
+        st.markdown(f"### ⚙️ Línea {index + 1}: {row['Orden']}")
+        st.caption(f"**Lote:** {row['Lote']} | **Cantidad:** {row['Kg']} Kg")
         
-        btn_iniciar = st.form_submit_button("INICIAR PROCESO ➔")
-        if btn_iniciar and orden and lote:
-            st.session_state.orden = orden
-            st.session_state.lote = lote
-            st.session_state.kg = kg
-            st.session_state.etapa = 1
-            st.session_state.tiempos["inicio_total"] = time.time()
-            st.session_state.tiempos["inicio_etapa"] = time.time()
-            st.rerun()
-
-# --- VISTA DEL PANEL VISUAL (LO QUE VES DESDE CASA) ---
-else:
-    # Encabezado con datos de producción
-    st.info(f"**Orden Activa:** {st.session_state.orden}   |   **Lote:** {st.session_state.lote}   |   **Cantidad:** {st.session_state.kg} Kg")
-    
-    # Dibujar las etapas de forma dinámica
-    cols = st.columns(6)
-    nombres_etapas = ["Pre-pesado", "Pesado", "Mezclado (20 min)", "Recirc. Manual", "Recirc. Auto (10 min)", "Envasado"]
-    iconos = ["📦", "⚖️", "🔄", "🛠️", "🔁", "🛍️"]
-    
-    for i in range(6):
-        num_etapa = i + 1
-        with cols[i]:
-            if st.session_state.etapa > num_etapa:
-                # Etapa completada
-                st.markdown(f"<div class='etapa-listo'><h2>{iconos[i]}</h2><p>{nombres_etapas[i]}</p><b>✓ Listo</b></div>", unsafe_allow_html=True)
-            elif st.session_state.etapa == num_etapa:
-                # Etapa actual en proceso
-                st.markdown(f"<div class='etapa-proceso'><h2>{iconos[i]}</h2><p>{nombres_etapas[i]}</p>⏳ En Proceso</div>", unsafe_allow_html=True)
-            else:
-                # Etapa en espera
-                st.markdown(f"<div class='etapa-espera'><h2>{iconos[i]}</h2><p>{nombres_etapas[i]}</p><span style='color:#666'>En espera</span></div>", unsafe_allow_html=True)
-
-    st.markdown("---")
-    
-    # Botón de control para el operador en planta
-    if st.session_state.etapa <= 6:
-        etapa_act = st.session_state.etapa
-        st.markdown(f"### ⚙️ Control de Operador (Etapa actual: {nombres_etapas[etapa_act-1]})")
+        # Dibujar barra visual de progreso para cada una de las 3 órdenes
+        etapa_actual = row['Etapa_Actual']
         
-        if st.button(f"FINALIZAR {nombres_etapas[etapa_act-1].upper()} ✓", type="primary"):
-            ahora = time.time()
-            duracion = int(ahora - st.session_state.tiempos["inicio_etapa"])
-            st.session_state.tiempos[nombres_etapas[etapa_act-1]] = f"{duracion}s"
-            
-            if st.session_state.etapa == 6:
-                # Guardar al historial final
-                st.success("¡Orden completada de forma segura! Registrando datos...")
-                time.sleep(2)
-                st.session_state.etapa = 0  # Reiniciar
+        for etapa in etapas_lista:
+            if etapa == etapa_actual:
+                # Etapa actual en naranja brillante
+                st.markdown(f"🟠 **[{etapa}]** <-- En proceso")
+            elif etapas_lista.index(etapa) < etapas_lista.index(etapa_actual if etapa_actual in etapas_lista else "En espera"):
+                # Etapas del pasado en verde
+                st.markdown(f"🟢 {etapa} ✓")
             else:
-                st.session_state.etapa += 1
-                st.session_state.tiempos["inicio_etapa"] = ahora
-            st.rerun()
-            
-    if st.button("❌ Cancelar Orden"):
-        st.session_state.etapa = 0
-        st.rerun()
+                # Etapas futuras en gris
+                st.markdown(f"⚪ {etapa}")
+        
+        st.markdown(f"*Nota: {row['Comentarios']}*")
+
+st.markdown("---")
+
+# ==========================================
+# VISTA 2: FORMATO MODIFICABLE (Estilo Excel)
+# ==========================================
+st.subheader("📝 Panel de Control Modificable (Editor de Datos)")
+st.info("💡 Puedes dar doble clic sobre cualquier celda de abajo para modificar los datos (Kg, Lote o cambiar la Etapa). Los cambios se reflejarán arriba inmediatamente.")
+
+# El data_editor permite modificar los datos directamente en la pantalla
+datos_editados = st.data_editor(
+    st.session_state.df_fabricaciones,
+    num_rows="dynamic", # Te permite agregar o quitar filas si hay más fabricaciones
+    use_container_width=True
+)
+
+# Guardar los cambios hechos en la tabla modificable al estado del sistema
+if st.button("💾 Guardar y Sincronizar Cambios"):
+    st.session_state.df_fabricaciones = datos_editados
+    st.success("¡Datos actualizados correctamente en el sistema!")
+    time.sleep(1)
+    st.rerun()
