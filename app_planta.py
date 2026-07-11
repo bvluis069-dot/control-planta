@@ -65,28 +65,26 @@ for i, col in enumerate(mezcladores_cols):
             st.info(f"**Orden:** {ord_act} | **Lote:** {lot_act} | **Kg:** {kg_act}")
             
             # Dibujar las etapas visuales tipo semáforo
-            for idx_e, nombre_e in enumerate(nombres_etapas):
+            for idx_e, text_e in enumerate(nombres_etapas):
                 num_e = idx_e + 1
                 if etapa_act > num_e:
-                    st.markdown(f"🟢 {iconos[idx_e]} {nombre_e} ✓")
+                    st.markdown(f"🟢 {iconos[idx_e]} {text_e} ✓")
                 elif etapa_act == num_e:
-                    st.markdown(f"🟠 **[{iconos[idx_e]} {nombre_e}]** <-- Activo")
+                    st.markdown(f"🟠 **[{iconos[idx_e]} {text_e}]** <-- Activo")
                 else:
-                    st.markdown(f"⚪ {iconos[idx_e]} {nombre_e}")
+                    st.markdown(f"⚪ {iconos[idx_e]} {text_e}")
             
             st.markdown("---")
             
-            # Botón de avance para el operador
+            # Botones de avance limpios sin parámetros obsoletos
             if etapa_act <= 6:
-                nombre_etapa_actual = nombres_etapas[etapa_act - 1]
-                if st.button(f"FINALIZAR {nombre_etapa_actual.upper()} ✓", key=f"btn_sig_m{m}", type="primary", use_container_width=True):
+                text_etapa_actual = nombres_etapas[etapa_act - 1]
+                if st.button(f"FINALIZAR {text_etapa_actual.upper()} ✓", key=f"btn_sig_m{m}", type="primary"):
                     ahora = time.time()
-                    # Calcular cuántos minutos duró la etapa
                     duracion_min = round((ahora - st.session_state[f"m{m}_tiempos"]["t_etapa"]) / 60, 2)
-                    st.session_state[f"m{m}_tiempos"][nombre_etapa_actual] = f"{duracion_min} min"
+                    st.session_state[f"m{m}_tiempos"][text_etapa_actual] = f"{duracion_min} min"
                     
                     if etapa_act == 6:
-                        # Si es la última etapa, armamos la fila para el historial en Excel
                         st.success("¡Guardando registro en el historial!")
                         nueva_fila = {
                             "Fecha": datetime.now().strftime("%Y-%m-%d"),
@@ -97,11 +95,9 @@ for i, col in enumerate(mezcladores_cols):
                             "Inicio": st.session_state[f"m{m}_tiempos"]["Inicio_Proceso"],
                             "Fin": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
-                        # Meter las duraciones de cada etapa
                         for e in nombres_etapas:
                             nueva_fila[e] = st.session_state[f"m{m}_tiempos"].get(e, "0 min")
                         
-                        # Subir los tiempos al Google Sheets de tu historial
                         if conn is not None:
                             try:
                                 df_historial = conn.read(worksheet="Historial", ttl="0d")
@@ -110,13 +106,12 @@ for i, col in enumerate(mezcladores_cols):
                             except:
                                 pass
                         
-                        # Reiniciar mezclador
                         st.session_state[f"m{m}_etapa"] = 0
                     else:
                         st.session_state[f"m{m}_etapa"] += 1
                         st.session_state[f"m{m}_tiempos"]["t_etapa"] = ahora
                     st.rerun()
             
-            if st.button("❌ Cancelar", key=f"btn_can_m{m}", use_container_width=True):
+            if st.button("❌ Cancelar", key=f"btn_can_m{m}"):
                 st.session_state[f"m{m}_etapa"] = 0
                 st.rerun()
