@@ -47,19 +47,21 @@ iconos = ["📦", "⚖️", "🧪", "🔄", "🛠️", "🔁", "🧪", "🛍️"
 # ==========================================
 # MENÚ LATERAL: CONTROL DE ACCESO
 # ==========================================
-st.sidebar.markdown("# Control de Acceso")
+st.sidebar.markdown("# 🔐 Control de Acceso")
 rol_seleccionado = st.sidebar.radio(
     "Selecciona tu perfil de visualización:",
-    [" Nivel Operativo", " Nivel de Procesos"]
+    ["🎛️ Nivel Operativo (Mezcladores)", "📊 Nivel Ingeniero de Procesos"]
 )
 
 st.sidebar.markdown("---")
-if st.sidebar.button("Sincronizar / Actualizar Tablero"):
+if st.sidebar.button("🔄 Sincronizar / Actualizar Tablero"):
     st.rerun()
 
-
-if rol_seleccionado == "Nivel Operativo (Mezcladores)":
-    st.title("🏭 Monitoreo y Control de Procesos — Termoplasticas")
+# ==========================================
+# VISTA 1: INTERFAZ NIVEL OPERATIVO
+# ==========================================
+if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
+    st.title("🏭 Monitoreo y Control de Procesos — Base Solvente T2")
     st.markdown("---")
     
     col_m1, col_m2, col_m3 = st.columns(3)
@@ -156,12 +158,14 @@ if rol_seleccionado == "Nivel Operativo (Mezcladores)":
                     memoria_global.datos[m] = {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}}
                     st.rerun()
 
-
+# ==========================================
+# VISTA 2: INTERFAZ NIVEL INGENIERO DE PROCESOS
+# ==========================================
 else:
-    st.title("📊 Panel de Análisis e Indicadores")
+    st.title("📊 Panel de Análisis e Indicadores — Ingeniero de Procesos")
     st.markdown("---")
     
-    st.subheader("Órdenes Actualmente en Ejecución (Planta Activa)")
+    st.subheader("⚠️ Órdenes Actualmente en Ejecución (Planta Activa)")
     
     f_col1, f_col2, f_col3 = st.columns(3)
     f_cols = [f_col1, f_col2, f_col3]
@@ -188,7 +192,7 @@ else:
             {"Fecha": "2026-07-11", "Mezclador": "Mezclador 1", "Orden": "ORD-P1", "Lote": "L-01", "Kg": 1000, "Pre_pesado": "12 min", "Pesado": "15 min", "CC_1": "8 min", "Mezclado": "20 min", "Recirc_Manual": "10 min", "Recirc_Auto": "10 min", "CC_2": "7 min", "Envasado": "15 min"}
         ])
 
-    st.subheader("Análisis Estadístico de Tiempos Promedio por Etapa")
+    st.subheader("⏱️ Análisis Estadístico de Tiempos Promedio por Etapa")
     
     if not error_carga and len(df_historial) > 0:
         columnas_tiempos_bd = ["Pre_pesado", "Pesado", "CC_1", "Mezclado", "Recirc_Manual", "Recirc_Auto", "CC_2", "Envasado"]
@@ -209,7 +213,7 @@ else:
         
         st.bar_chart(data=df_estadisticas, x="Etapa del Proceso", y="Minutos Promedio")
         
-        st.markdown("### Resumen Operativo")
+        st.markdown("### 📈 Resumen Operativo")
         k1, k2, k3 = st.columns(3)
         with k1:
             st.metric(label="Total de Órdenes Procesadas", value=len(df_historial))
@@ -221,8 +225,8 @@ else:
             st.metric(label="Tiempo Ciclo Promedio Completo", value=f"{round(tiempo_total_promedio, 1)} min")
             
     else:
-        st.info("Las gráficas de tiempos se generarán cuando finalices la primera orden.")
+        st.info("💡 Las gráficas de tiempos se generarán cuando finalices la primera orden.")
 
     st.markdown("---")
-    st.subheader("Auditoría de Tiempos y Trazabilidad Completa")
+    st.subheader("📋 Auditoría de Tiempos y Trazabilidad Completa")
     st.dataframe(df_historial)
