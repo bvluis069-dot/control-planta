@@ -15,7 +15,7 @@ try:
     df_actual = conn.read(worksheet="Activas", ttl="0d")
 except Exception as e:
     st.error("Conectando con la base de datos central...")
-    # Datos de respaldo por si la hoja está vacía al inicio
+    # Datos de respaldo estables por si la hoja está vacía al inicio
     df_actual = pd.DataFrame([
         {"Orden": "ORD-001", "Lote": "L-1044431", "Kg": 1200, "Etapa_Actual": "Pesado", "Comentarios": "Turno A"},
         {"Orden": "ORD-002", "Lote": "L-1044432", "Kg": 800, "Etapa_Actual": "Mezclado (20 min)", "Comentarios": "Muestra tomada"},
@@ -58,11 +58,11 @@ st.markdown("---")
 st.subheader("📝 Panel de Edición y Cambios (Estilo Excel)")
 st.info("💡 Haz doble clic sobre cualquier celda para modificar datos o avanzar de etapa. Al terminar, presiona el botón de guardar abajo.")
 
-# Componente interactivo para modificar los datos directamente en la web
+# Corregido width='stretch' para evitar advertencias y asegurar estabilidad
 datos_editados = st.data_editor(
     df_actual,
     num_rows="dynamic",
-    use_container_width=True,
+    width="stretch",
     key="editor_central"
 )
 
@@ -71,7 +71,7 @@ if st.button("💾 Guardar y Sincronizar con la Nube", type="primary"):
     try:
         # Sobreescribir la hoja de Google Sheets con los nuevos datos modificados
         conn.update(worksheet="Activas", data=datos_editados)
-        st.success("¡Sincronización exitosa! Los datos se han actualizado en Google Sheets y en ambas pantallas.")
+        st.success("¡Sincronización exitosa! Los datos se han actualizado en Google Sheets.")
         time.sleep(1)
         st.rerun()
     except Exception as e:
