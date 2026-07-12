@@ -62,7 +62,7 @@ if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
     for i, col in enumerate(mezcladores_cols):
         m = i + 1
         with col:
-            st.markdown(f"## 🔄 Mezclador {m}")
+            st.markdown(f"## 🔄 ME-0 {m}")
             
             estado_mezclador = memoria_global.datos[m]
             
