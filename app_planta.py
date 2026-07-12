@@ -42,7 +42,7 @@ nombres_etapas = [
     "Control de Calidad (C.C. 2)", 
     "Envasado"
 ]
-iconos = ["📦", "🧪", "⚖️", "🔄", "🛠️", "🔁", "🧪", "🛍️"]
+iconos = ["📦", "⚖️", "🔄", "🧪", "🛠️", "🔁", "🧪", "🛍️"]
 
 # ==========================================
 # MENÚ LATERAL: CONTROL DE ACCESO
