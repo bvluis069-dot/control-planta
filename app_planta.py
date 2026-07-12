@@ -6,19 +6,15 @@ from datetime import datetime
 
 st.set_page_config(page_title="Grupo Sánchez - Control de Mezcladores", layout="wide")
 
-# =========================================================================
-# CONFIGURACIÓN DE ENLACES
-# =========================================================================
+
 SHEET_ID = "18k2Zn-7IAqMB62dw4Lv_kWVOI2nmz4Syck_I6rQhWEl"
 LECTURA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Historial"
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwU4j05N-6peH6hC1cd3swfn4oerY6C2byX9HEPvfEbJFJqKWfsA42LlLW1wSldUve6SQ/exec"
 
-# =========================================================================
-# ESTRUCTURA DE MEMORIA GLOBAL (Sin bloqueos que tiren el servidor)
-# =========================================================================
+
 class MemoriaPlanta:
     def __init__(self):
-        # Usar una clase oculta los cambios al inspector estricto de Streamlit
+       
         self.datos = {
             1: {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}},
             2: {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}},
@@ -31,7 +27,7 @@ def obtener_instancia_planta():
 
 memoria_global = obtener_instancia_planta()
 
-# Definición de las 8 etapas
+
 nombres_etapas = [
     "Pre-pesado", 
     "Pesado", 
@@ -44,9 +40,7 @@ nombres_etapas = [
 ]
 iconos = ["📦", "⚖️", "🔄", "🧪", "🛠️", "🔁", "🧪", "🛍️"]
 
-# ==========================================
-# MENÚ LATERAL: CONTROL DE ACCESO
-# ==========================================
+
 st.sidebar.markdown("# 🔐 Control de Acceso")
 rol_seleccionado = st.sidebar.radio(
     "Selecciona tu perfil de visualización:",
@@ -57,9 +51,7 @@ st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Sincronizar / Actualizar Tablero"):
     st.rerun()
 
-# ==========================================
-# VISTA 1: INTERFAZ NIVEL OPERATIVO
-# ==========================================
+
 if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
     st.title("🏭 Monitoreo y Control de Procesos — Base Solvente T2")
     st.markdown("---")
@@ -158,9 +150,7 @@ if rol_seleccionado == "🎛️ Nivel Operativo (Mezcladores)":
                     memoria_global.datos[m] = {"etapa": 0, "orden": "", "lote": "", "kg": 0, "tiempos": {}}
                     st.rerun()
 
-# ==========================================
-# VISTA 2: INTERFAZ NIVEL INGENIERO DE PROCESOS
-# ==========================================
+
 else:
     st.title("📊 Panel de Análisis e Indicadores — Ingeniero de Procesos")
     st.markdown("---")
