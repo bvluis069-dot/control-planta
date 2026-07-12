@@ -35,14 +35,14 @@ memoria_global = obtener_instancia_planta()
 nombres_etapas = [
     "Pre-pesado", 
     "Pesado", 
+    "Mezclado (20 min)",
     "Control de Calidad (C.C. 1)", 
-    "Mezclado (20 min)", 
     "Recirc. Manual", 
     "Recirc. Auto (10 min)", 
     "Control de Calidad (C.C. 2)", 
     "Envasado"
 ]
-iconos = ["📦", "⚖️", "🧪", "🔄", "🛠️", "🔁", "🧪", "🛍️"]
+iconos = ["📦", "🧪", "⚖️", "🔄", "🛠️", "🔁", "🧪", "🛍️"]
 
 # ==========================================
 # MENÚ LATERAL: CONTROL DE ACCESO
